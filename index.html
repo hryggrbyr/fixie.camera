@@ -1,0 +1,574 @@
+<!doctype html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#663399" />
+        <link rel="manifest" href="manifest.json" />
+        <link rel="apple-touch-icon" href="icon-192.png" />
+        <title>Fixie</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+            /* COMPOSITION - Layout structure */
+            body {
+                display: grid;
+                padding: 1rem;
+                margin: 0;
+                height: 100vh;
+                gap: 1rem;
+                font-family: system-ui;
+                overflow: hidden;
+            }
+
+            /* Landscape: viewer 66%, controls 33% side by side */
+            @media (orientation: landscape) {
+                body {
+                    grid-template-columns: 2fr 1fr;
+                    grid-template-rows: 1fr;
+                }
+
+                video {
+                    grid-column: 1;
+                    grid-row: 1;
+                }
+
+                #controls {
+                    grid-column: 2;
+                    grid-row: 1;
+                }
+
+                #sliders {
+                    display: flex;
+                    gap: 1rem;
+                    flex: 1;
+                }
+            }
+
+            /* Portrait: stacked */
+            @media (orientation: portrait) {
+                body {
+                    grid-template-columns: 1fr;
+                    grid-template-rows: 1fr auto;
+                }
+
+                video {
+                    grid-row: 1;
+                }
+
+                #controls {
+                    grid-row: 2;
+                }
+
+                #sliders {
+                    display: flex;
+                    flex-direction: row;
+                    gap: 1rem;
+                }
+            }
+
+            video,
+            img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                border-radius: 0.5rem;
+            }
+
+            #grid {
+                grid-column: 1;
+                grid-row: 1;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                border-radius: 0.5rem;
+            }
+
+            /* UTILITY - Color schemes */
+            :root {
+                --bg: whitesmoke;
+                --fg: #2f2f2f;
+                --accent: rebeccapurple;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --bg: #2f2f2f;
+                    --fg: whitesmoke;
+                    --accent: goldenrod;
+                }
+            }
+
+            /* BLOCK - Base styling */
+            body {
+                background: var(--bg);
+                color: var(--fg);
+            }
+
+            #logo {
+                margin: 0 auto;
+                display: block;
+            }
+
+            #controls {
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+                align-items: stretch;
+            }
+
+            #sliders {
+                position: relative;
+            }
+
+            .dial-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 0.25rem;
+                flex: 1;
+                position: relative;
+            }
+
+            .dial-container:first-child {
+                align-self: flex-start;
+                flex: 1;
+            }
+
+            .dial-container:last-child {
+                align-self: flex-end;
+                flex: 2;
+            }
+
+            .dial-container > label {
+                font-weight: 600;
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+
+            .dial-wrapper {
+                position: relative;
+                width: 100%;
+                aspect-ratio: 1;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            .dial {
+                width: 100%;
+                height: 100%;
+                display: block;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            .dial-buttons {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+            }
+
+            .dial-btn {
+                flex: 1;
+                background: transparent;
+                border: none;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            .dial-btn:active {
+                background: rgba(128, 128, 128, 0.1);
+            }
+
+            #iso-ring,
+            #shutter-ring {
+                transition: transform 0.3s ease;
+            }
+
+            button#capture {
+                background: var(--accent);
+                color: var(--bg);
+                border: none;
+                padding: 0.75rem 1.5rem;
+                border-radius: 0.5rem;
+                font-size: 1rem;
+                font-weight: 600;
+                cursor: pointer;
+            }
+
+            button#capture:active {
+                transform: scale(0.98);
+            }
+        </style>
+    </head>
+    <body>
+        <video id="video" autoplay playsinline></video>
+        <svg id="grid" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <line
+                x1="33.33"
+                y1="0"
+                x2="33.33"
+                y2="100"
+                stroke="currentColor"
+                stroke-width="0.2"
+                opacity="0.5"
+            />
+            <line
+                x1="66.66"
+                y1="0"
+                x2="66.66"
+                y2="100"
+                stroke="currentColor"
+                stroke-width="0.2"
+                opacity="0.5"
+            />
+            <line
+                x1="0"
+                y1="33.33"
+                x2="100"
+                y2="33.33"
+                stroke="currentColor"
+                stroke-width="0.2"
+                opacity="0.5"
+            />
+            <line
+                x1="0"
+                y1="66.66"
+                x2="100"
+                y2="66.66"
+                stroke="currentColor"
+                stroke-width="0.2"
+                opacity="0.5"
+            />
+        </svg>
+        <canvas id="canvas" style="display: none"></canvas>
+
+        <div id="controls">
+            <h1>Fixie</h1>
+
+            <div id="sliders">
+                <div class="dial-container">
+                    <label>ISO</label>
+                    <div class="dial-wrapper">
+                        <svg class="dial" viewBox="0 0 120 120" id="iso-dial">
+                            <!-- Static indicator at top -->
+                            <polygon
+                                points="60,10 55,20 65,20"
+                                fill="var(--accent)"
+                            />
+
+                            <!-- Rotating dial -->
+                            <g
+                                id="iso-ring"
+                                style="transform-origin: 60px 60px"
+                            >
+                                <circle
+                                    cx="60"
+                                    cy="60"
+                                    r="45"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                />
+                                <circle
+                                    cx="60"
+                                    cy="60"
+                                    r="35"
+                                    fill="var(--bg)"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                />
+                            </g>
+
+                            <!-- Center value display -->
+                            <text
+                                x="60"
+                                y="65"
+                                text-anchor="middle"
+                                font-size="16"
+                                font-weight="bold"
+                                fill="var(--accent)"
+                                id="iso-display"
+                            >
+                                400
+                            </text>
+                        </svg>
+                        <div class="dial-buttons">
+                            <button
+                                type="button"
+                                class="dial-btn"
+                                data-dial="iso"
+                                data-dir="-1"
+                            ></button>
+                            <button
+                                type="button"
+                                class="dial-btn"
+                                data-dial="iso"
+                                data-dir="1"
+                            ></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dial-container">
+                    <label>Shutter</label>
+                    <div class="dial-wrapper">
+                        <svg
+                            class="dial"
+                            viewBox="0 0 120 120"
+                            id="shutter-dial"
+                        >
+                            <!-- Static indicator at top -->
+                            <polygon
+                                points="60,10 55,20 65,20"
+                                fill="var(--accent)"
+                            />
+
+                            <!-- Rotating dial -->
+                            <g
+                                id="shutter-ring"
+                                style="transform-origin: 60px 60px"
+                            >
+                                <circle
+                                    cx="60"
+                                    cy="60"
+                                    r="45"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                />
+                                <circle
+                                    cx="60"
+                                    cy="60"
+                                    r="35"
+                                    fill="var(--bg)"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                />
+                            </g>
+
+                            <!-- Center value display -->
+                            <text
+                                x="60"
+                                y="65"
+                                text-anchor="middle"
+                                font-size="16"
+                                font-weight="bold"
+                                fill="var(--accent)"
+                                id="shutter-display"
+                            >
+                                1/125
+                            </text>
+                        </svg>
+                        <div class="dial-buttons">
+                            <button
+                                type="button"
+                                class="dial-btn"
+                                data-dial="shutter"
+                                data-dir="-1"
+                            ></button>
+                            <button
+                                type="button"
+                                class="dial-btn"
+                                data-dial="shutter"
+                                data-dir="1"
+                            ></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="capture">Capture</button>
+        </div>
+
+        <img id="photo" style="display: none" />
+
+        <script>
+            const video = document.getElementById("video");
+            const canvas = document.getElementById("canvas");
+            const photo = document.getElementById("photo");
+
+            let stream, track;
+
+            const isoValues = [100, 200, 400, 800];
+            const shutterValues = [
+                8000, 4000, 2000, 1000, 500, 250, 125, 60, 30, 15, 8, 4,
+            ];
+            let isoIndex = 2; // Start at 400
+            let shutterIndex = 6; // Start at 1/125
+
+            const isoRing = document.getElementById("iso-ring");
+            const shutterRing = document.getElementById("shutter-ring");
+            const isoDisplay = document.getElementById("iso-display");
+            const shutterDisplay = document.getElementById("shutter-display");
+
+            // Start camera
+            async function startCamera() {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" },
+                });
+                video.srcObject = stream;
+                track = stream.getVideoTracks()[0];
+
+                // Check capabilities
+                const capabilities = track.getCapabilities();
+                console.log("Camera capabilities:", capabilities);
+            }
+
+            // Generate tick marks for ISO
+            function generateIsoTicks() {
+                const ring = isoRing;
+                isoValues.forEach((value, i) => {
+                    const angle = (i * 360) / isoValues.length;
+                    const g = document.createElementNS(
+                        "http://www.w3.org/2000/svg",
+                        "g",
+                    );
+                    g.setAttribute("transform", `rotate(${angle} 60 60)`);
+                    g.innerHTML = `
+                    <line x1="60" y1="20" x2="60" y2="28" stroke="currentColor" stroke-width="2"/>
+                    <text x="60" y="38" text-anchor="middle" font-size="10" fill="currentColor">${value}</text>
+                `;
+                    ring.appendChild(g);
+                });
+            }
+
+            // Generate tick marks for shutter
+            // Generate tick marks for shutter
+            // Generate tick marks for shutter
+            // Generate tick marks for shutter
+            function generateShutterTicks() {
+                const ring = shutterRing;
+                shutterValues.forEach((value, i) => {
+                    const angle = (i * 360) / shutterValues.length;
+                    const g = document.createElementNS(
+                        "http://www.w3.org/2000/svg",
+                        "g",
+                    );
+                    g.setAttribute("transform", `rotate(${angle} 60 60)`);
+                    g.innerHTML = `
+                        <line x1="60" y1="20" x2="60" y2="28" stroke="currentColor" stroke-width="2"/>
+                        <text x="60" y="36" text-anchor="middle" font-size="4" fill="currentColor" writing-mode="tb" glyph-orientation-vertical="0">1/${value}</text>
+                    `;
+                    ring.appendChild(g);
+                });
+            }
+
+            generateIsoTicks();
+            generateShutterTicks();
+
+            // Update dial rotation
+            function updateDials() {
+                const isoAngle = -(isoIndex * 360) / isoValues.length;
+                const shutterAngle =
+                    -(shutterIndex * 360) / shutterValues.length;
+
+                isoRing.style.transform = `rotate(${isoAngle}deg)`;
+                shutterRing.style.transform = `rotate(${shutterAngle}deg)`;
+
+                isoDisplay.textContent = isoValues[isoIndex];
+                shutterDisplay.textContent = `1/${shutterValues[shutterIndex]}`;
+
+                updateSettings();
+            }
+
+            // Handle dial button clicks
+            document.querySelectorAll(".dial-btn").forEach((btn) => {
+                btn.onclick = () => {
+                    const dial = btn.dataset.dial;
+                    const dir = parseInt(btn.dataset.dir);
+
+                    if (dial === "iso") {
+                        isoIndex =
+                            (isoIndex + dir + isoValues.length) %
+                            isoValues.length;
+                    } else {
+                        shutterIndex =
+                            (shutterIndex + dir + shutterValues.length) %
+                            shutterValues.length;
+                    }
+
+                    updateDials();
+                    saveSettings();
+                };
+            });
+
+            // Update camera settings
+            async function updateSettings() {
+                const iso = isoValues[isoIndex];
+                const shutter = 1000000 / shutterValues[shutterIndex];
+
+                if (!track) return;
+
+                try {
+                    await track.applyConstraints({
+                        advanced: [
+                            {
+                                iso: iso,
+                                exposureTime: shutter,
+                            },
+                        ],
+                    });
+                } catch (e) {
+                    console.log("Setting not supported:", e);
+                }
+            }
+
+            // Capture photo
+            document.getElementById("capture").onclick = () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext("2d").drawImage(video, 0, 0);
+
+                // Convert to blob and download
+                canvas.toBlob(
+                    (blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `fixie_${Date.now()}.jpg`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+
+                        // Also show preview
+                        photo.src = URL.createObjectURL(blob);
+                        photo.style.display = "block";
+                    },
+                    "image/jpeg",
+                    0.95,
+                );
+            };
+
+            // Save/load settings
+            function saveSettings() {
+                localStorage.setItem("fixie_iso_index", isoIndex);
+                localStorage.setItem("fixie_shutter_index", shutterIndex);
+            }
+
+            function loadSettings() {
+                const savedIso = localStorage.getItem("fixie_iso_index");
+                const savedShutter = localStorage.getItem(
+                    "fixie_shutter_index",
+                );
+
+                if (savedIso) isoIndex = parseInt(savedIso);
+                if (savedShutter) shutterIndex = parseInt(savedShutter);
+
+                updateDials();
+            }
+
+            // Register service worker
+            if ("serviceWorker" in navigator) {
+                navigator.serviceWorker.register("./sw.js");
+            }
+
+            // Initialize
+            loadSettings();
+            startCamera().then(() => updateDials());
+        </script>
+    </body>
+</html>
