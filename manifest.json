@@ -2,7 +2,7 @@
   "name": "Fixie",
   "short_name": "Fixie",
   "description": "Manual camera with fixed aperture controls",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#f5f5f5",
   "theme_color": "#663399",
