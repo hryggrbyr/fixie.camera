@@ -407,9 +407,14 @@
             const shutterDisplay = document.getElementById("shutter-display");
 
             // Start camera
+            // Start camera
             async function startCamera() {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
+                    video: {
+                        facingMode: "environment",
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                    },
                 });
                 video.srcObject = stream;
                 track = stream.getVideoTracks()[0];
@@ -417,6 +422,11 @@
                 // Check capabilities
                 const capabilities = track.getCapabilities();
                 console.log("Camera capabilities:", capabilities);
+
+                // Handle orientation changes
+                screen.orientation?.addEventListener("change", () => {
+                    updateDials();
+                });
             }
 
             // Generate tick marks for ISO
@@ -563,6 +573,7 @@
 
             // Register service worker
             if ("serviceWorker" in navigator) {
+                console.log("register sw.js");
                 navigator.serviceWorker.register("./sw.js");
             }
 
